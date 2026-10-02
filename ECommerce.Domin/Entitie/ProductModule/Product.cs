@@ -1,0 +1,34 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using System.Text.Json.Serialization;
+using System.Threading.Tasks;
+
+namespace ECommerce.Domin.Entitie.ProductModule
+{
+    public class Product : BaseEntity<int>
+    {
+
+        public string Name { get; set; } = null!;  
+        public string Description { get; set; } = null!;    
+
+        [JsonPropertyName("PictureUrl")]
+        public string PuctureUrl { get; set; } = null!;
+
+        public decimal Price { get; set; }
+
+
+        #region Rlashenship
+
+        //fk
+        public int BrandId { get; set; }    
+
+        public ProductBrand ProductBrands { get; set; } = default!;
+
+        public int TypeId { get; set; }
+
+        public ProductType ProductTypes { get; set; } = default!;
+        #endregion
+    }
+}
