@@ -25,7 +25,12 @@ namespace ECommerce.Presentation.Controler
             if (!ModelState.IsValid)
                 return BadRequest(ModelState);
 
-            var result = await _orderServise.CreateOrderAsync(request);
+            var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            var email = User.FindFirstValue(ClaimTypes.Email);
+            if (string.IsNullOrWhiteSpace(userId) || string.IsNullOrWhiteSpace(email))
+                return Unauthorized("The authenticated user's identity could not be verified from token.");
+
+            var result = await _orderServise.CreateOrderAsync(request, email, userId);
             return result.ToActionResult(this);
         }
 

@@ -23,7 +23,11 @@ namespace ECommerce.Presentation.Controler
         public async Task<IActionResult> CreatePaymentIntent([FromBody] CreatePaymentIntentRequest request)
         {
             var email = User.FindFirstValue(ClaimTypes.Email);
-            var result = await _orderServise.CreatePaymentIntentAsync(request, email ?? string.Empty);
+            var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            if (string.IsNullOrWhiteSpace(email) || string.IsNullOrWhiteSpace(userId))
+                return Unauthorized("The authenticated user's identity could not be verified from token.");
+
+            var result = await _orderServise.CreatePaymentIntentAsync(request, email, userId);
             return result.ToActionResult(this);
         }
 

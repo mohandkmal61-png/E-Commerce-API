@@ -8,6 +8,5 @@ namespace ECommerce.ServicesAbstraction
         Task<Result<UserResponse>> LoginAsync(LoginRequest request);
         Task<Result<UserResponse>> RegisterAsync(RegisterRequest request);
         Task<Result<bool>> EmailExistsAsync(string email);
-        Task<Result<UserResponse>> GetCurrentUserAsync(string email);
     }
 }

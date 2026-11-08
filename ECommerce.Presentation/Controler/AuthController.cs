@@ -70,15 +70,5 @@ namespace ECommerce.Presentation.Controler
             var result = await _authenticationService.EmailExistsAsync(email);
             return result.ToActionResult(this);
         }
-
-        /// <summary>
-        /// Retrieves the user associated with the specified email address and generates a token.
-        /// </summary>
-        [HttpGet("current-user")]
-        public async Task<IActionResult> CurrentUser([FromQuery] string email)
-        {
-            var result = await _authenticationService.GetCurrentUserAsync(email);
-            return result.ToActionResult(this);
-        }
     }
 }

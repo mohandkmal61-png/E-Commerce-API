@@ -136,31 +136,5 @@ namespace ECommerce.Services
             var user = await _userManager.FindByEmailAsync(email);
             return Result<bool>.ok(user is not null);
         }
-
-        public async Task<Result<UserResponse>> GetCurrentUserAsync(string email)
-        {
-            if (string.IsNullOrWhiteSpace(email))
-            {
-                return Result<UserResponse>.fail(
-                    Error.Validation("EmailRequired", "Email is required"));
-            }
-
-            var user = await _userManager.FindByEmailAsync(email);
-            if (user is null)
-            {
-                return Result<UserResponse>.fail(
-                    Error.NotFound("UserNotFound", "No user was found with the specified email address"));
-            }
-
-            var roles = await _userManager.GetRolesAsync(user);
-            var response = new UserResponse
-            {
-                Email = user.Email ?? string.Empty,
-                DisplayName = user.UserName ?? user.Email ?? "User",
-                Token = _tokenService.GenerateToken(user, roles)
-            };
-
-            return Result<UserResponse>.ok(response);
-        }
     }
 }

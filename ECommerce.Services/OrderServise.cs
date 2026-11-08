@@ -27,12 +27,12 @@ namespace ECommerce.Services
             _configuration = configuration;
         }
 
-        public async Task<Result<OrderDto>> CreateOrderAsync(CreateOrderRequest request)
+        public async Task<Result<OrderDto>> CreateOrderAsync(CreateOrderRequest request, string userEmail, string? userId = null)
         {
-            if (string.IsNullOrWhiteSpace(request.BasketId))
-                return Result<OrderDto>.fail(Error.Validation("BasketIdRequired", "Basket id is required."));
+            var effectiveEmail = !string.IsNullOrWhiteSpace(userEmail) ? userEmail : request.CustomerEmail;
+            var userKey = !string.IsNullOrWhiteSpace(userId) ? userId : effectiveEmail;
 
-            if (string.IsNullOrWhiteSpace(request.CustomerEmail))
+            if (string.IsNullOrWhiteSpace(effectiveEmail))
                 return Result<OrderDto>.fail(Error.Validation("CustomerEmailRequired", "Customer email is required."));
 
             if (request.DeliveryMethodId <= 0)
@@ -45,9 +45,15 @@ namespace ECommerce.Services
                 return Result<OrderDto>.fail(
                     Error.Validation("PaymentIntentRequired", "A Stripe payment intent is required before creating the order."));
 
-            var basket = await _basketRepository.GetBasketAsync(request.BasketId);
+            var basket = await _basketRepository.GetUserBasketAsync(userKey);
             if (basket is null)
                 return Result<OrderDto>.fail(Error.NotFound("BasketNotFound", "Basket was not found."));
+
+            if (string.IsNullOrWhiteSpace(request.BasketId) ||
+                !string.Equals(request.BasketId, basket.Id, StringComparison.Ordinal))
+            {
+                return Result<OrderDto>.fail(Error.Validation("BasketMismatch", "The requested basket does not match the authenticated user's basket."));
+            }
 
             if (basket.Items is null || basket.Items.Count == 0)
                 return Result<OrderDto>.fail(Error.Validation("BasketEmpty", "Basket is empty."));
@@ -87,6 +93,15 @@ namespace ECommerce.Services
             }
 
             var paymentIntent = await GetPaymentIntentAsync(request.PaymentIntentId);
+            if (!paymentIntent.Metadata.TryGetValue("basketId", out var paymentBasketId) ||
+                !string.Equals(paymentBasketId, basket.Id, StringComparison.Ordinal) ||
+                !paymentIntent.Metadata.TryGetValue("customerEmail", out var paymentCustomerEmail) ||
+                !string.Equals(paymentCustomerEmail, effectiveEmail, StringComparison.OrdinalIgnoreCase))
+            {
+                return Result<OrderDto>.fail(
+                    Error.Unauthorized("PaymentIntentOwnershipMismatch", "The payment intent does not belong to this basket and customer."));
+            }
+
             var total = subtotal + deliveryMethod.Price;
             var expectedAmount = ConvertToStripeAmount(total);
             var expectedCurrency = _configuration["Stripe:Currency"] ?? "usd";
@@ -107,7 +122,7 @@ namespace ECommerce.Services
             var order = new Order
             {
                 Id = Guid.NewGuid(),
-                UserEmail = request.CustomerEmail,
+                UserEmail = effectiveEmail,
                 OrderDate = DateTimeOffset.UtcNow,
                 Address = new OrdeeAddres
                 {
@@ -137,12 +152,12 @@ namespace ECommerce.Services
                     Metadata = new Dictionary<string, string>
                     {
                         ["orderId"] = order.Id.ToString(),
-                        ["basketId"] = request.BasketId,
-                        ["customerEmail"] = request.CustomerEmail
+                        ["basketId"] = basket.Id,
+                        ["customerEmail"] = effectiveEmail
                     }
                 });
 
-            await _basketRepository.DeleteBasketAsync(request.BasketId);
+            await _basketRepository.DeleteUserBasketAsync(userKey, basket.Id, basket.Version);
 
             var response = new OrderDto
             {
@@ -223,20 +238,25 @@ namespace ECommerce.Services
 
         public async Task<Result<PaymentIntentDto>> CreatePaymentIntentAsync(
             CreatePaymentIntentRequest request,
-            string email)
+            string email,
+            string? userId = null)
         {
-            if (string.IsNullOrWhiteSpace(email))
+            if (string.IsNullOrWhiteSpace(email) && string.IsNullOrWhiteSpace(userId))
                 return Result<PaymentIntentDto>.fail(
-                    Error.Unauthorized("UserEmailMissing", "The authenticated user's email was not found."));
+                    Error.Unauthorized("UserIdentityMissing", "The authenticated user's identity was not found."));
 
-            if (string.IsNullOrWhiteSpace(request.BasketId))
-                return Result<PaymentIntentDto>.fail(
-                    Error.Validation("BasketIdRequired", "Basket id is required."));
-
-            var basket = await _basketRepository.GetBasketAsync(request.BasketId);
+            var userKey = !string.IsNullOrWhiteSpace(userId) ? userId : email;
+            var basket = await _basketRepository.GetUserBasketAsync(userKey);
             if (basket is null)
                 return Result<PaymentIntentDto>.fail(
                     Error.NotFound("BasketNotFound", "Basket was not found."));
+
+            if (string.IsNullOrWhiteSpace(request.BasketId) ||
+                !string.Equals(request.BasketId, basket.Id, StringComparison.Ordinal))
+            {
+                return Result<PaymentIntentDto>.fail(
+                    Error.Validation("BasketMismatch", "The requested basket does not match the authenticated user's basket."));
+            }
 
             if (basket.Items.Count == 0)
                 return Result<PaymentIntentDto>.fail(

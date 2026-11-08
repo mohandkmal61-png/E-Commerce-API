@@ -20,6 +20,7 @@ using ECommerce.Persistence.IdentityData.DbContest;
 using System.Security.Claims;
 using System.Text;
 using Microsoft.OpenApi.Models;
+using Microsoft.Data.SqlClient;
 
 namespace E_CommereceAPI
 {
@@ -30,6 +31,17 @@ namespace E_CommereceAPI
             var builder = WebApplication.CreateBuilder(args);
             var defaultConnection = builder.Configuration.GetConnectionString("DefaultConnection")
                 ?? throw new InvalidOperationException("Connection string 'DefaultConnection' was not found.");
+            var initializeDatabase = builder.Configuration.GetValue<bool>("DatabaseInitialization:Enabled");
+
+            if (initializeDatabase)
+            {
+                var databaseName = new SqlConnectionStringBuilder(defaultConnection).InitialCatalog;
+                if (!string.Equals(databaseName, "ECommerceFrontendTest", StringComparison.OrdinalIgnoreCase))
+                {
+                    throw new InvalidOperationException(
+                        "Database initialization is enabled only for the 'ECommerceFrontendTest' database.");
+                }
+            }
 
             // Add services to the container.
 
@@ -134,13 +146,11 @@ namespace E_CommereceAPI
             var app = builder.Build();
 
 
-            #region Data Seed
-
-            await  app.Migratedbasync();
-           await app.SeedDataasync(); 
-
-
-            #endregion
+            if (initializeDatabase)
+            {
+                await app.Migratedbasync();
+                await app.SeedDataasync();
+            }
 
             // Configure the HTTP request pipeline.
             app.UseExceptionHandler();
